@@ -306,3 +306,13 @@ def verify_export_file_headers_sanitised_with_table(context):
             f"Position {position}: Expected header '{expected_header_name}' "
             f"(from template key '{expected_template_key}') but got '{actual_header}'"
         )
+
+
+@step('contact details are set up with title "{title}" forename "{forename}" and surname "{surname}"')
+def setup_contact_details(context, title, forename, surname):
+    """Set up context.contact with the provided details for templates that use __request__ fields."""
+    context.contact = {
+        'title': title,
+        'forename': forename,
+        'surname': surname
+    }

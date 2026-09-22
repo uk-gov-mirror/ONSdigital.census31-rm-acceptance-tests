@@ -51,6 +51,7 @@
   Scenario: Export file headers are sanitised to ISD-compliant names
     Given sample file "sample_input_england_census_spec.csv" is loaded successfully
     And an export file template has been created with template "P_OR_H2"
+    And contact details are set up with title "Mr", forename "John" and surname "Smith"
     When an export file action rule has been created for packcode "P_OR_H2"
     Then UAC_UPDATE messages are emitted with active set to true
     And an export file is created with correct rows
