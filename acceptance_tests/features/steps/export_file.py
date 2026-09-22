@@ -308,7 +308,7 @@ def verify_export_file_headers_sanitised_with_table(context):
         )
 
 
-@step('contact details are set up with title "{title}" forename "{forename}" and surname "{surname}"')
+@step('contact details are set up with title "{title}", forename "{forename}" and surname "{surname}"')
 def setup_contact_details(context, title, forename, surname):
     """Set up context.contact with the provided details for templates that use __request__ fields."""
     context.contact = {
