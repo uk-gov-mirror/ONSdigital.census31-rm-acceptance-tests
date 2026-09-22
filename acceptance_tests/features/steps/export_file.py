@@ -265,10 +265,11 @@ def verify_export_file_headers_are_sanitised(context):
     """
     Verify that export file headers are sanitised.
     
-    Reads ACTUAL headers from ACTUAL export file and verifies:
-    1. Internal template keys (like __uac__) are NOT in the file
-    2. File contains only sanitised names or plain field names
-    3. No hardcoded sanitisation logic is duplicated in tests
+    Compares template position to actual headers position to verify sanitisation occurred
+    without hardcoding the expected mapping.
+    
+    For example, if template[0] = '__uac__' and actual_headers[0] = 'UAC',
+    the test verifies that __uac__ was mapped to UAC.
     """
     supplier = _get_context_export_supplier_or_default(context)
     actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
@@ -281,21 +282,36 @@ def verify_export_file_headers_are_sanitised(context):
     actual_header_line = actual_export_file_rows[0]
     actual_headers = next(csv.reader([actual_header_line]))
 
-    # Identify which internal template keys exist in the template
-    internal_keys = [f for f in context.template if f.startswith('__')]
+    template = context.template
 
-    # Verify: Internal template keys should NOT appear in actual file headers
-    for internal_key in internal_keys:
-        test_helper.assertFalse(
-            internal_key in actual_headers,
-            f"Internal template key '{internal_key}' should NOT appear in export file headers. "
-            f"It should be sanitised. Actual headers: {actual_headers}"
-        )
+    # Verify: Headers must be same length (1:1 mapping maintained)
+    test_helper.assertEqual(
+        len(template), len(actual_headers),
+        f"Template has {len(template)} fields but export file has {len(actual_headers)} headers. "
+        f"Template: {template}, Actual headers: {actual_headers}"
+    )
 
-    # Verify: All headers should be either sanitised names or plain field names (no __ prefix)
-    for header in actual_headers:
-        test_helper.assertFalse(
-            header.startswith('__'),
-            f"Header '{header}' starts with '__' which indicates internal formatting. "
-            f"All headers should be sanitised. Actual headers: {actual_headers}"
-        )
+    # Verify: By position, check that internal keys were converted (not plain passed through)
+    for position, template_key in enumerate(template):
+        actual_header = actual_headers[position]
+        
+        if template_key.startswith('__'):
+            # This template key is internal - it should be converted to something else
+            test_helper.assertNotEqual(
+                template_key, actual_header,
+                f"Position {position}: Internal template key '{template_key}' was NOT sanitised. "
+                f"It should be converted to something else, but got '{actual_header}' instead"
+            )
+            # Verify the actual header doesn't contain internal formatting
+            test_helper.assertFalse(
+                actual_header.startswith('__'),
+                f"Position {position}: Actual header '{actual_header}' still has internal formatting. "
+                f"Template key was '{template_key}'"
+            )
+        else:
+            # This is a plain field name - should pass through unchanged
+            test_helper.assertEqual(
+                template_key, actual_header,
+                f"Position {position}: Plain field '{template_key}' should pass through unchanged, "
+                f"but got '{actual_header}'"
+            )
