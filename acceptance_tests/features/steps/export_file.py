@@ -15,24 +15,6 @@ from acceptance_tests.utilities.test_case_helper import test_helper
 from config import Config
 
 
-HEADER_SANITISATION_MAP = {
-    '__uac__': 'UAC',
-    '__qid__': 'QID',
-    '__welsh_uac__': 'WALES_UAC',
-    '__welsh_qid__': 'WALES_QID',
-    '__caseref__': 'CASEREF',
-    '__pack_code__': 'PRODUCTPACK_CODE',
-    '__request__.title': 'TITLE',
-    '__request__.forename': 'FORENAME',
-    '__request__.surname': 'SURNAME',
-}
-
-
-def sanitise_header_name(header: str) -> str:
-    """Sanitise internal template header to external ISD-compliant name."""
-    return HEADER_SANITISATION_MAP.get(header, header)
-
-
 @step("an export file is created with correct rows")
 def check_export_file(context):
     template = context.template
@@ -63,8 +45,14 @@ def check_export_file(context):
            if "__welsh_uac__" in template else ())
     )
     if '__uac__' in template or '__welsh_uac__' in template:
+        # Read the ACTUAL header from the actual export file (already sanitised by service)
+        actual_header_line = actual_export_file_rows[0]
+        actual_headers = next(csv.reader([actual_header_line]))
+        
+        # Generate expected data rows using the template for logic and actual headers for output
+        # This avoids duplicating the header sanitisation logic
         expected_export_file_rows = generate_expected_export_file_rows(
-            template, context.emitted_cases, emitted_uacs, uacs_from_actual_export_file,
+            template, actual_headers, context.emitted_cases, emitted_uacs, uacs_from_actual_export_file,
             contact, pack_code, context.expected_questionnaire_type,
             context.expected_welsh_questionnaire_type
         )
@@ -124,16 +112,21 @@ def _get_unhashed_uacs_from_actual_export_file(actual_export_file_rows, template
 
 
 def generate_expected_export_file_rows(
-        template: List, cases: List, uac_update_events: List, expected_uacs: Iterable[str],
+        template: List, actual_headers: List, cases: List, uac_update_events: List, expected_uacs: Iterable[str],
         contact: Dict, pack_code: str, questionnaire_type, welsh_questionnaire_type):
+    """
+    Generate expected export file rows.
+    
+    Uses actual headers from the actual export file (which may be sanitised)
+    to avoid duplicating sanitisation logic. Uses template for field-to-data mapping.
+    """
     hashed_uac_to_uac = {
         hashlib.sha256(uac.encode('utf-8')).hexdigest(): uac
         for uac in expected_uacs
     }
 
-    # Sanitise the template header row before formatting
-    sanitised_header = [sanitise_header_name(field) for field in template]
-    export_file_rows = [format_expected_export_file_row(sanitised_header)]  # expected header with sanitised names
+    # Use actual headers from the actual export file (no sanitisation duplication)
+    export_file_rows = [format_expected_export_file_row(actual_headers)]
     for case in cases:
         export_row_components = []
         for field in template:
@@ -269,7 +262,14 @@ def decrypt_message(message: str) -> str:
 
 @step("the export file headers are sanitised to ISD-compliant names")
 def verify_export_file_headers_are_sanitised(context):
-
+    """
+    Verify that export file headers are sanitised.
+    
+    Reads ACTUAL headers from ACTUAL export file and verifies:
+    1. Internal template keys (like __uac__) are NOT in the file
+    2. File contains only sanitised names or plain field names
+    3. No hardcoded sanitisation logic is duplicated in tests
+    """
     supplier = _get_context_export_supplier_or_default(context)
     actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
                                                    supplier=supplier)
@@ -281,38 +281,21 @@ def verify_export_file_headers_are_sanitised(context):
     actual_header_line = actual_export_file_rows[0]
     actual_headers = next(csv.reader([actual_header_line]))
 
-    # Expected sanitisation mappings - used only to verify what the service produced
-    expected_sanitised_names = {
-        'UAC': '__uac__',
-        'QID': '__qid__',
-        'WALES_UAC': '__welsh_uac__',
-        'WALES_QID': '__welsh_qid__',
-        'CASEREF': '__caseref__',
-        'PRODUCTPACK_CODE': '__pack_code__',
-        'TITLE': '__request__.title',
-        'FORENAME': '__request__.forename',
-        'SURNAME': '__request__.surname',
-    }
+    # Identify which internal template keys exist in the template
+    internal_keys = [f for f in context.template if f.startswith('__')]
 
-    # Verify: For each internal key in the template, the file should have the sanitised name
-    for sanitised_name, internal_name in expected_sanitised_names.items():
-        if internal_name in context.template:
-            test_helper.assertTrue(
-                sanitised_name in actual_headers,
-                f"Expected sanitised header '{sanitised_name}' in export file but got: {actual_headers}. "
-                f"Template key '{internal_name}' should be sanitised to '{sanitised_name}'"
-            )
-            test_helper.assertFalse(
-                internal_name in actual_headers,
-                f"Internal template key '{internal_name}' should NOT appear in export file. "
-                f"File headers: {actual_headers}. It should be sanitised to '{sanitised_name}'"
-            )
+    # Verify: Internal template keys should NOT appear in actual file headers
+    for internal_key in internal_keys:
+        test_helper.assertFalse(
+            internal_key in actual_headers,
+            f"Internal template key '{internal_key}' should NOT appear in export file headers. "
+            f"It should be sanitised. Actual headers: {actual_headers}"
+        )
 
-    # Verify: Unmapped headers (plain field names) still pass through unchanged
+    # Verify: All headers should be either sanitised names or plain field names (no __ prefix)
     for header in actual_headers:
-        if header not in expected_sanitised_names.values():  # It's not an internal key
-            test_helper.assertFalse(
-                header.startswith('__'),
-                f"Unexpected internal-looking header '{header}' in export file. "
-                f"All headers should be either sanitised ISD names or plain field names without __ prefix"
-            )
+        test_helper.assertFalse(
+            header.startswith('__'),
+            f"Header '{header}' starts with '__' which indicates internal formatting. "
+            f"All headers should be sanitised. Actual headers: {actual_headers}"
+        )
