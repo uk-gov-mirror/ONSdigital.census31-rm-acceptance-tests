@@ -15,6 +15,24 @@ from acceptance_tests.utilities.test_case_helper import test_helper
 from config import Config
 
 
+HEADER_SANITISATION_MAP = {
+    '__uac__': 'UAC',
+    '__qid__': 'QID',
+    '__welsh_uac__': 'WALES_UAC',
+    '__welsh_qid__': 'WALES_QID',
+    '__caseref__': 'CASEREF',
+    '__pack_code__': 'PRODUCTPACK_CODE',
+    '__request__.title': 'TITLE',
+    '__request__.forename': 'FORENAME',
+    '__request__.surname': 'SURNAME',
+}
+
+
+def sanitise_header_name(header: str) -> str:
+    """Sanitise internal template header to external ISD-compliant name."""
+    return HEADER_SANITISATION_MAP.get(header, header)
+
+
 @step("an export file is created with correct rows")
 def check_export_file(context):
     template = context.template
@@ -113,7 +131,9 @@ def generate_expected_export_file_rows(
         for uac in expected_uacs
     }
 
-    export_file_rows = [format_expected_export_file_row(template)]  # expected header
+    # Sanitise the template header row before formatting
+    sanitised_header = [sanitise_header_name(field) for field in template]
+    export_file_rows = [format_expected_export_file_row(sanitised_header)]  # expected header with sanitised names
     for case in cases:
         export_row_components = []
         for field in template:
@@ -249,15 +269,7 @@ def decrypt_message(message: str) -> str:
 
 @step("the export file headers are sanitised to ISD-compliant names")
 def verify_export_file_headers_are_sanitised(context):
-    """
-    Verify that the ACTUAL export file produced by the service has sanitised headers.
-    
-    This step:
-    1. Retrieves the actual export file created by the service
-    2. Reads the ACTUAL CSV headers from the first row
-    3. Asserts that internal template keys have been converted to ISD-compliant names
-    4. Does NOT reimplement sanitisation logic - it observes real system behavior
-    """
+
     supplier = _get_context_export_supplier_or_default(context)
     actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
                                                    supplier=supplier)
