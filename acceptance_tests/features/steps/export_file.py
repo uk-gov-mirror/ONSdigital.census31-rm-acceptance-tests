@@ -245,3 +245,62 @@ def decrypt_message(message: str) -> str:
         message_text = our_key.decrypt(encrypted_text_message)
 
         return message_text.message
+
+
+@step("the export file headers are sanitised to ISD-compliant names")
+def verify_export_file_headers_are_sanitised(context):
+    """
+    Verify that the ACTUAL export file produced by the service has sanitised headers.
+    
+    This step:
+    1. Retrieves the actual export file created by the service
+    2. Reads the ACTUAL CSV headers from the first row
+    3. Asserts that internal template keys have been converted to ISD-compliant names
+    4. Does NOT reimplement sanitisation logic - it observes real system behavior
+    """
+    supplier = _get_context_export_supplier_or_default(context)
+    actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
+                                                   supplier=supplier)
+
+    if not actual_export_file_rows:
+        test_helper.fail("No export file rows returned")
+
+    # Read the ACTUAL headers from the ACTUAL export file (first line)
+    actual_header_line = actual_export_file_rows[0]
+    actual_headers = next(csv.reader([actual_header_line]))
+
+    # Expected sanitisation mappings - used only to verify what the service produced
+    expected_sanitised_names = {
+        'UAC': '__uac__',
+        'QID': '__qid__',
+        'WALES_UAC': '__welsh_uac__',
+        'WALES_QID': '__welsh_qid__',
+        'CASEREF': '__caseref__',
+        'PRODUCTPACK_CODE': '__pack_code__',
+        'TITLE': '__request__.title',
+        'FORENAME': '__request__.forename',
+        'SURNAME': '__request__.surname',
+    }
+
+    # Verify: For each internal key in the template, the file should have the sanitised name
+    for sanitised_name, internal_name in expected_sanitised_names.items():
+        if internal_name in context.template:
+            test_helper.assertTrue(
+                sanitised_name in actual_headers,
+                f"Expected sanitised header '{sanitised_name}' in export file but got: {actual_headers}. "
+                f"Template key '{internal_name}' should be sanitised to '{sanitised_name}'"
+            )
+            test_helper.assertFalse(
+                internal_name in actual_headers,
+                f"Internal template key '{internal_name}' should NOT appear in export file. "
+                f"File headers: {actual_headers}. It should be sanitised to '{sanitised_name}'"
+            )
+
+    # Verify: Unmapped headers (plain field names) still pass through unchanged
+    for header in actual_headers:
+        if header not in expected_sanitised_names.values():  # It's not an internal key
+            test_helper.assertFalse(
+                header.startswith('__'),
+                f"Unexpected internal-looking header '{header}' in export file. "
+                f"All headers should be either sanitised ISD names or plain field names without __ prefix"
+            )
