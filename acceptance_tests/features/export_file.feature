@@ -54,4 +54,13 @@
     When an export file action rule has been created for packcode "P_IC_ICL1"
     Then UAC_UPDATE messages are emitted with active set to true
     And an export file is created with correct rows
-    And the export file headers are sanitised to ISD-compliant names
+    And the export file header row is sanitised according to:
+      | template_key         | header_name |
+      | __pack_code__        | PRODUCTPACK_CODE |
+      | __uac__              | UAC         |
+      | __caseref__          | CASEREF     |
+      | ADDRESS_LINE1        | ADDRESS_LINE1 |
+      | ADDRESS_LINE2        | ADDRESS_LINE2 |
+      | ADDRESS_LINE3        | ADDRESS_LINE3 |
+      | TOWN_NAME            | TOWN_NAME   |
+      | POSTCODE             | POSTCODE    |

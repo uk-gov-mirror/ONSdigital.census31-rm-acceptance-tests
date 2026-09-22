@@ -260,16 +260,18 @@ def decrypt_message(message: str) -> str:
         return message_text.message
 
 
-@step("the export file headers are sanitised to ISD-compliant names")
-def verify_export_file_headers_are_sanitised(context):
+@step("the export file header row is sanitised according to:")
+def verify_export_file_headers_sanitised_with_table(context):
     """
-    Verify that export file headers are sanitised.
+    Verify that export file headers are sanitised according to the provided table.
     
-    Compares template position to actual headers position to verify sanitisation occurred
-    without hardcoding the expected mapping.
+    Table format:
+      | template_key         | header_name |
+      | __uac__              | UAC         |
+      | ADDRESS_LINE1        | ADDRESS_LINE1 |
     
-    For example, if template[0] = '__uac__' and actual_headers[0] = 'UAC',
-    the test verifies that __uac__ was mapped to UAC.
+    Verifies by position that each template_key in the expected table
+    appears in the actual export file with the expected header_name.
     """
     supplier = _get_context_export_supplier_or_default(context)
     actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
@@ -282,36 +284,25 @@ def verify_export_file_headers_are_sanitised(context):
     actual_header_line = actual_export_file_rows[0]
     actual_headers = next(csv.reader([actual_header_line]))
 
-    template = context.template
+    # Parse the table into list of dicts
+    expected_mappings = [row for row in context.table]
 
-    # Verify: Headers must be same length (1:1 mapping maintained)
+    # Verify count
     test_helper.assertEqual(
-        len(template), len(actual_headers),
-        f"Template has {len(template)} fields but export file has {len(actual_headers)} headers. "
-        f"Template: {template}, Actual headers: {actual_headers}"
+        len(expected_mappings), len(actual_headers),
+        f"Expected {len(expected_mappings)} headers but got {len(actual_headers)}. "
+        f"Expected: {[m['template_key'] for m in expected_mappings]}, "
+        f"Actual: {actual_headers}"
     )
 
-    # Verify: By position, check that internal keys were converted (not plain passed through)
-    for position, template_key in enumerate(template):
+    # Verify each mapping by position
+    for position, expected_mapping in enumerate(expected_mappings):
+        expected_template_key = expected_mapping['template_key']
+        expected_header_name = expected_mapping['header_name']
         actual_header = actual_headers[position]
-        
-        if template_key.startswith('__'):
-            # This template key is internal - it should be converted to something else
-            test_helper.assertNotEqual(
-                template_key, actual_header,
-                f"Position {position}: Internal template key '{template_key}' was NOT sanitised. "
-                f"It should be converted to something else, but got '{actual_header}' instead"
-            )
-            # Verify the actual header doesn't contain internal formatting
-            test_helper.assertFalse(
-                actual_header.startswith('__'),
-                f"Position {position}: Actual header '{actual_header}' still has internal formatting. "
-                f"Template key was '{template_key}'"
-            )
-        else:
-            # This is a plain field name - should pass through unchanged
-            test_helper.assertEqual(
-                template_key, actual_header,
-                f"Position {position}: Plain field '{template_key}' should pass through unchanged, "
-                f"but got '{actual_header}'"
-            )
+
+        test_helper.assertEqual(
+            expected_header_name, actual_header,
+            f"Position {position}: Expected header '{expected_header_name}' "
+            f"(from template key '{expected_template_key}') but got '{actual_header}'"
+        )
