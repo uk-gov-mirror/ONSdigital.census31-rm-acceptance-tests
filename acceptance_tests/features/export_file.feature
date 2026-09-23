@@ -48,10 +48,12 @@
       | sample_1_input_england_census_spec.csv  | P_IC_PCPR13A |
       | sample_1_input_england_census_spec.csv  | P_IC_PCPR23A |
 
+  @reset_pubsub_queues
   Scenario: Export file headers are sanitised to ISD-compliant names
-    Given sample file "sample_input_england_census_spec.csv" is loaded successfully
-    And an export file template has been created with template "P_IC_H2"
-    When an export file action rule has been created for packcode "P_IC_H2"
+    Given sample file "sample_1_input_england_census_spec.csv" is loaded successfully
+    And fulfilments are authorised for the export file template "P_OR_H2"
+    And a print fulfilment has been requested
+    When export file fulfilments are triggered to be exported
     Then UAC_UPDATE messages are emitted with active set to true
     And an export file is created with correct rows
     And the export file header row is sanitised according to:
@@ -62,6 +64,9 @@
       | __welsh_uac__        | WALES_UAC   |
       | __welsh_qid__        | WALES_QID   |
       | __caseref__          | CASEREF     |
+      | __request__.title    | TITLE       |
+      | __request__.forename | FORENAME    |
+      | __request__.surname  | SURNAME     |
       | ADDRESS_LINE1        | ADDRESS_LINE1 |
       | ADDRESS_LINE2        | ADDRESS_LINE2 |
       | ADDRESS_LINE3        | ADDRESS_LINE3 |

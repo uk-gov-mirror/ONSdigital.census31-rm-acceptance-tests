@@ -48,7 +48,7 @@ def check_export_file(context):
         # Read the ACTUAL header from the actual export file (already sanitised by service)
         actual_header_line = actual_export_file_rows[0]
         actual_headers = next(csv.reader([actual_header_line]))
-        
+
         # Generate expected data rows using the template for logic and actual headers for output
         # This avoids duplicating the header sanitisation logic
         expected_export_file_rows = generate_expected_export_file_rows(
@@ -116,7 +116,7 @@ def generate_expected_export_file_rows(
         contact: Dict, pack_code: str, questionnaire_type, welsh_questionnaire_type):
     """
     Generate expected export file rows.
-    
+
     Uses actual headers from the actual export file (which may be sanitised)
     to avoid duplicating sanitisation logic. Uses template for field-to-data mapping.
     """
@@ -262,17 +262,7 @@ def decrypt_message(message: str) -> str:
 
 @step("the export file header row is sanitised according to:")
 def verify_export_file_headers_sanitised_with_table(context):
-    """
-    Verify that export file headers are sanitised according to the provided table.
-    
-    Table format:
-      | template_key         | header_name |
-      | __uac__              | UAC         |
-      | ADDRESS_LINE1        | ADDRESS_LINE1 |
-    
-    Verifies by position that each template_key in the expected table
-    appears in the actual export file with the expected header_name.
-    """
+
     supplier = _get_context_export_supplier_or_default(context)
     actual_export_file_rows = get_export_file_rows(context.test_start_utc_datetime, context.pack_code,
                                                    supplier=supplier)
@@ -306,13 +296,3 @@ def verify_export_file_headers_sanitised_with_table(context):
             f"Position {position}: Expected header '{expected_header_name}' "
             f"(from template key '{expected_template_key}') but got '{actual_header}'"
         )
-
-
-@step('contact details are set up with title "{title}", forename "{forename}" and surname "{surname}"')
-def setup_contact_details(context, title, forename, surname):
-    """Set up context.contact with the provided details for templates that use __request__ fields."""
-    context.contact = {
-        'title': title,
-        'forename': forename,
-        'surname': surname
-    }
