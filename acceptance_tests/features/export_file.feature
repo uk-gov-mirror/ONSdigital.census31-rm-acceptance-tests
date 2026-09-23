@@ -50,9 +50,8 @@
 
   Scenario: Export file headers are sanitised to ISD-compliant names
     Given sample file "sample_input_england_census_spec.csv" is loaded successfully
-    And an export file template has been created with template "P_OR_H2"
-    And contact details are set up with title "Mr", forename "John" and surname "Smith"
-    When an export file action rule has been created for packcode "P_OR_H2"
+    And an export file template has been created with template "P_IC_H2"
+    When an export file action rule has been created for packcode "P_IC_H2"
     Then UAC_UPDATE messages are emitted with active set to true
     And an export file is created with correct rows
     And the export file header row is sanitised according to:
@@ -63,9 +62,6 @@
       | __welsh_uac__        | WALES_UAC   |
       | __welsh_qid__        | WALES_QID   |
       | __caseref__          | CASEREF     |
-      | __request__.title    | TITLE       |
-      | __request__.forename | FORENAME    |
-      | __request__.surname  | SURNAME     |
       | ADDRESS_LINE1        | ADDRESS_LINE1 |
       | ADDRESS_LINE2        | ADDRESS_LINE2 |
       | ADDRESS_LINE3        | ADDRESS_LINE3 |
